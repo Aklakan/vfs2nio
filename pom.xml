@@ -28,7 +28,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.aksw.thirdparty.com.sshtools</groupId>
 	<artifactId>vfs2nio</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.1-1</version>
 	<name>Vfs2Nio</name>
 	<description>Library that bridges Commons VFS 2 to Java's NIO.2 virtual file system</description>
 	<url>http://www.sshtools.com</url>
