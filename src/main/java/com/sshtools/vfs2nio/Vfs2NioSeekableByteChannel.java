@@ -1,5 +1,5 @@
 /**
- * Copyright © 2018 - 2021 SSHTOOLS Limited (support@sshtools.com)
+ * Copyright © 2018 - 2024 SSHTOOLS Limited (support@sshtools.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,71 +27,100 @@ import org.apache.commons.vfs2.RandomAccessContent;
 import com.fasterxml.jackson.core.io.DataOutputAsStream;
 
 public class Vfs2NioSeekableByteChannel
-	implements SeekableByteChannel
+    implements SeekableByteChannel
 {
-	protected RandomAccessContent content;
-	protected boolean isOpen;
+    protected RandomAccessContent content;
 
-	public Vfs2NioSeekableByteChannel(RandomAccessContent content) {
-		this(content, true);
-	}
+    protected ReadableByteChannel activeReadChannel  = null;
+    protected WritableByteChannel activeWriteChannel = null;
 
-	public Vfs2NioSeekableByteChannel(RandomAccessContent content, boolean isOpen) {
-		super();
-		this.content = content;
-		this.isOpen = isOpen;
-	}
+    protected boolean isOpen;
 
-	@Override
-	public boolean isOpen() {
-		return isOpen;
-	}
+    public Vfs2NioSeekableByteChannel(RandomAccessContent content) {
+        this(content, true);
+    }
 
-	@Override
-	public void close() throws IOException {
-		content.close();
-		isOpen = false;
-	}
+    public Vfs2NioSeekableByteChannel(RandomAccessContent content, boolean isOpen) {
+        super();
+        this.content = content;
+        this.isOpen = isOpen;
+    }
 
-	public ReadableByteChannel getReadChannel() throws IOException {
-		return Channels.newChannel(content.getInputStream());
-	}
+    @Override
+    public boolean isOpen() {
+        return isOpen;
+    }
 
-	public WritableByteChannel getWriteChannel() throws IOException {
-		/* DataOutputAsStream comes from jackson */
-		return Channels.newChannel(new DataOutputAsStream(content));
-	}
+    protected void closeActiveChannels() throws IOException {
+        if (activeReadChannel != null) {
+            activeReadChannel.close();
+            activeReadChannel = null;
+        }
 
-	@Override
-	public int read(ByteBuffer dst) throws IOException {
-		return getReadChannel().read(dst);
-	}
+        if (activeWriteChannel != null) {
+            activeWriteChannel.close();
+            activeWriteChannel = null;
+        }
+    }
 
-	@Override
-	public int write(ByteBuffer src) throws IOException {
-		return getWriteChannel().write(src);
-	}
+    @Override
+    public void close() throws IOException {
+        try {
+            closeActiveChannels();
+        } finally {
+            content.close();
+        }
+        isOpen = false;
+    }
 
-	@Override
-	public long position() throws IOException {
-		return content.getFilePointer();
-	}
+    protected ReadableByteChannel getReadChannel() throws IOException {
+        if (activeReadChannel == null) {
+            activeReadChannel = Channels.newChannel(content.getInputStream());
+        }
+        return activeReadChannel;
+    }
 
-	@Override
-	public SeekableByteChannel position(long newPosition) throws IOException {
-		content.seek(newPosition);
-		return this;
-	}
+    protected WritableByteChannel getWriteChannel() throws IOException {
+        /* DataOutputAsStream comes from jackson */
+        if (activeWriteChannel == null) {
+            activeWriteChannel = Channels.newChannel(new DataOutputAsStream(content));
+        }
+        return activeWriteChannel;
+    }
 
-	@Override
-	public long size() throws IOException {
-		return content.length();
-	}
+    @Override
+    public int read(ByteBuffer dst) throws IOException {
+        return getReadChannel().read(dst);
+    }
 
-	@Override
-	public SeekableByteChannel truncate(long size) throws IOException {
-		content.setLength(size);
-		return this;
-	}
+    @Override
+    public int write(ByteBuffer src) throws IOException {
+        return getWriteChannel().write(src);
+    }
 
+    @Override
+    public long position() throws IOException {
+        return content.getFilePointer();
+    }
+
+    @Override
+    public SeekableByteChannel position(long newPosition) throws IOException {
+        long currentPos = position();
+        if (currentPos != newPosition) {
+            closeActiveChannels();
+            content.seek(newPosition);
+        }
+        return this;
+    }
+
+    @Override
+    public long size() throws IOException {
+        return content.length();
+    }
+
+    @Override
+    public SeekableByteChannel truncate(long size) throws IOException {
+        content.setLength(size);
+        return this;
+    }
 }
